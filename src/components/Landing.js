@@ -1,38 +1,46 @@
 import React from 'react';
 import { Layout, Menu, Button, Typography } from 'antd';
 import { useNavigate } from 'react-router-dom';
+import { isLoggedIn } from '../services/auth';
 
 const { Header, Content, Footer } = Layout;
 const { Title, Paragraph } = Typography;
 
 const Landing = () => {
-    const navigate = useNavigate();
+  const navigate = useNavigate();
   return (
     <Layout style={{ minHeight: '100vh' }}>
-    <Header
-    style={{
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        backgroundColor: '#004080',
-        padding: '0 24px',
-    }}
-    >
-    <div style={{ color: '#fff', fontWeight: 'bold', fontSize: 24 }}>
-        FlexDetect
-    </div>
-    <Button
-        type="primary"
+      <Header
         style={{
-        backgroundColor: '#fadb14',
-        borderColor: '#fadb14',
-        color: '#004080',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          backgroundColor: '#004080',
+          padding: '0 24px',
         }}
-        onClick={() => navigate('/register')}
-    >
-        Register
-    </Button>
-    </Header>
+      >
+        <div style={{ color: '#fff', fontWeight: 'bold', fontSize: 24 }}>
+          FlexDetect
+        </div>
+
+        {isLoggedIn() ? (
+          <Button
+            type="primary"
+            style={{ backgroundColor: '#fadb14', borderColor: '#fadb14', color: '#004080'  }}
+            onClick={() => navigate('/dashboard')}
+          >
+            Dashboard
+          </Button>
+        ) : (
+          <Button
+            type="primary"
+            style={{ backgroundColor: '#fadb14', borderColor: '#fadb14', color: '#004080' }}
+            onClick={() => navigate('/register')}
+          >
+            Register
+          </Button>
+        )}
+      </Header>
 
       <Content style={{ padding: '80px 50px', backgroundColor: '#e6f7ff' /* light blue */ }}>
         <div

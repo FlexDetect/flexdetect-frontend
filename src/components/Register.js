@@ -21,7 +21,7 @@ const Register = () => {
         password: values.password,
       });
       message.success('Registration successful! You can now log in.');
-      navigate('/login');
+      navigate('/dashboard');
     } catch (error) {
       message.error(error.response?.data || 'Registration failed. Try again.');
     } finally {
