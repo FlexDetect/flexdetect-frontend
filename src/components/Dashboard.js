@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   Layout,
   Menu,
@@ -10,215 +10,468 @@ import {
   Row,
   Col,
   Card,
+  Table,
   Select,
-  Upload,
   message,
+  DatePicker,
+  Radio,
+  Upload,
 } from 'antd';
 import {
   HomeOutlined,
-  UserOutlined,
+  ProfileOutlined,
+  DatabaseOutlined,
   BarChartOutlined,
   SettingOutlined,
   PlusOutlined,
-  UploadOutlined,
   EditOutlined,
+  DeleteOutlined,
+  UploadOutlined,
 } from '@ant-design/icons';
+import {
+  fetchFacilities,
+  createFacility,
+  updateFacility,
+  deleteFacility,
+  fetchMeasurementNames,
+  createMeasurementName,
+  updateMeasurementName,
+  deleteMeasurementName,
+  fetchDatasets,
+  createDataset,
+  updateDataset,
+  deleteDataset,
+  fetchMeasurements,
+  createMeasurement,
+  updateMeasurement,
+  deleteMeasurement,
+} from '../services/dataServiceClient';
+
 import Navbar from './Navbar';
+import dayjs from 'dayjs';
 
 const { Header, Sider, Content } = Layout;
 const { Title } = Typography;
 const { Option } = Select;
 
 const facilityTypes = ['Office', 'Retail', 'Industrial', 'Mixed-use'];
+const dataTypes = ['FLOAT', 'INT', 'BOOL'];
+
+const BUTTON_STYLE = {
+  backgroundColor: '#1890ff',
+  borderColor: '#1890ff',
+  color: '#fff',
+};
 
 const Dashboard = () => {
   const [collapsed, setCollapsed] = useState(false);
   const [selectedKey, setSelectedKey] = useState('facilities');
-  const [isModalVisible, setIsModalVisible] = useState(false);
+
+  // Shared data states
   const [facilities, setFacilities] = useState([]);
+  const [measurementNames, setMeasurementNames] = useState([]);
+  const [datasets, setDatasets] = useState([]);
+  const [measurements, setMeasurements] = useState([]);
+
+  // Modal states and editing objects
+  const [facilityModalVisible, setFacilityModalVisible] = useState(false);
   const [editingFacility, setEditingFacility] = useState(null);
-  const [mlData, setMlData] = useState(null);
 
-  const [form] = Form.useForm();
+  const [measurementNameModalVisible, setMeasurementNameModalVisible] = useState(false);
+  const [editingMeasurementName, setEditingMeasurementName] = useState(null);
 
-  const handleMenuClick = (e) => {
-    setSelectedKey(e.key);
-  };
+  const [datasetModalVisible, setDatasetModalVisible] = useState(false);
+  const [editingDataset, setEditingDataset] = useState(null);
 
-  const showModal = (facility = null) => {
-    setEditingFacility(facility);
-    if (facility) {
-      form.setFieldsValue({
-        name: facility.name,
-        address: facility.address,
-        gpsLat: facility.gpsLat,
-        gpsLng: facility.gpsLng,
-        type: facility.type,
-        sizeSqm: facility.sizeSqm,
-        floors: facility.floors,
-        contactName: facility.contactName,
-        contactPhone: facility.contactPhone,
-        contactEmail: facility.contactEmail,
-        mlDataJson: facility.mlDataJson || '',
-      });
-      setMlData(facility.mlDataJson || null);
-    } else {
-      form.resetFields();
-      setMlData(null);
+  const [measurementModalVisible, setMeasurementModalVisible] = useState(false);
+  const [editingMeasurement, setEditingMeasurement] = useState(null);
+
+  // Forms
+  const [facilityForm] = Form.useForm();
+  const [measurementNameForm] = Form.useForm();
+  const [datasetForm] = Form.useForm();
+  const [measurementForm] = Form.useForm();
+
+  // Selected IDs for navigation and relations
+  const [selectedFacilityId, setSelectedFacilityId] = useState(null);
+  const [selectedDatasetId, setSelectedDatasetId] = useState(null);
+
+  // --- Loaders and API calls ---
+
+  const loadFacilities = useCallback(async () => {
+    try {
+      const data = await fetchFacilities();
+      setFacilities(data);
+      if (!selectedFacilityId && data.length > 0) {
+        setSelectedFacilityId(data[0].id);
+      }
+    } catch {
+      message.error('Failed to load facilities');
     }
-    setIsModalVisible(true);
-  };
+  }, [selectedFacilityId]);
 
-  const handleCancel = () => {
-    setIsModalVisible(false);
-    form.resetFields();
-    setEditingFacility(null);
-    setMlData(null);
-  };
-
-  const handleAddOrEditFacility = (values) => {
-    const facilityData = {
-      ...values,
-      mlDataJson: mlData,
-    };
-    if (editingFacility) {
-      setFacilities((prev) =>
-        prev.map((f) => (f.id === editingFacility.id ? { ...f, ...facilityData } : f))
-      );
-    } else {
-      const newFacility = {
-        id: Date.now(),
-        ...facilityData,
-      };
-      setFacilities((prev) => [...prev, newFacility]);
+  const loadMeasurementNames = useCallback(async () => {
+    try {
+      const data = await fetchMeasurementNames();
+      setMeasurementNames(data);
+    } catch {
+      message.error('Failed to load measurement names');
     }
-    setIsModalVisible(false);
-    form.resetFields();
-    setEditingFacility(null);
-    setMlData(null);
-  };
+  }, []);
 
-  const uploadProps = {
-    accept: '.json,application/json',
-    beforeUpload: (file) => {
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        try {
-          const json = JSON.parse(e.target.result);
-          setMlData(json);
-          message.success('ML data loaded successfully');
-        } catch {
-          message.error('Invalid JSON file');
-          setMlData(null);
+  const loadDatasets = useCallback(
+    async (facilityId) => {
+      if (!facilityId) {
+        setDatasets([]);
+        setSelectedDatasetId(null);
+        return;
+      }
+      try {
+        const data = await fetchDatasets(facilityId);
+        setDatasets(data);
+        if (!selectedDatasetId && data.length > 0) {
+          setSelectedDatasetId(data[0].id);
         }
-      };
-      reader.readAsText(file);
-      return false; // prevent upload
+      } catch {
+        message.error('Failed to load datasets');
+      }
     },
-    showUploadList: false,
+    [selectedDatasetId]
+  );
+
+  const loadMeasurements = useCallback(
+    async (datasetId) => {
+      if (!datasetId) {
+        setMeasurements([]);
+        return;
+      }
+      try {
+        const data = await fetchMeasurements(datasetId);
+        setMeasurements(data);
+      } catch {
+        message.error('Failed to load measurements');
+      }
+    },
+    []
+  );
+
+  // --- CRUD operations ---
+
+  // Facilities
+  const saveFacility = async (facility) => {
+    try {
+      if (facility.id) {
+        await updateFacility(facility.id, facility);
+        message.success('Facility updated');
+      } else {
+        await createFacility(facility);
+        message.success('Facility created');
+      }
+      await loadFacilities();
+      setFacilityModalVisible(false);
+      setEditingFacility(null);
+      facilityForm.resetFields();
+    } catch {
+      message.error('Failed to save facility');
+    }
   };
 
+  const removeFacility = async (id) => {
+    try {
+      await deleteFacility(id);
+      message.success('Facility deleted');
+      if (selectedFacilityId === id) {
+        setSelectedFacilityId(null);
+        setDatasets([]);
+        setSelectedDatasetId(null);
+        setMeasurements([]);
+      }
+      await loadFacilities();
+    } catch {
+      message.error('Failed to delete facility');
+    }
+  };
+
+  // Measurement Names (Custom Fields)
+  const saveMeasurementName = async (mn) => {
+    try {
+      if (mn.id) {
+        await updateMeasurementName(mn.id, mn);
+        message.success('Measurement name updated');
+      } else {
+        await createMeasurementName(mn);
+        message.success('Measurement name created');
+      }
+      await loadMeasurementNames();
+      setMeasurementNameModalVisible(false);
+      setEditingMeasurementName(null);
+      measurementNameForm.resetFields();
+    } catch {
+      message.error('Failed to save measurement name');
+    }
+  };
+
+  const removeMeasurementName = async (id) => {
+    try {
+      await deleteMeasurementName(id);
+      message.success('Measurement name deleted');
+      await loadMeasurementNames();
+    } catch {
+      message.error('Failed to delete measurement name');
+    }
+  };
+
+  // Datasets
+  const saveDataset = async (dataset) => {
+    try {
+      if (dataset.id) {
+        await updateDataset(selectedFacilityId, dataset.id, dataset);
+        message.success('Dataset updated');
+      } else {
+        await createDataset(selectedFacilityId, dataset);
+        message.success('Dataset created');
+      }
+      await loadDatasets(selectedFacilityId);
+      setDatasetModalVisible(false);
+      setEditingDataset(null);
+      datasetForm.resetFields();
+    } catch {
+      message.error('Failed to save dataset');
+    }
+  };
+
+  const removeDataset = async (id) => {
+    try {
+      await deleteDataset(selectedFacilityId, id);
+      message.success('Dataset deleted');
+      if (selectedDatasetId === id) {
+        setSelectedDatasetId(null);
+        setMeasurements([]);
+      }
+      await loadDatasets(selectedFacilityId);
+    } catch {
+      message.error('Failed to delete dataset');
+    }
+  };
+
+  // Measurements
+  const saveMeasurement = async (measurement) => {
+    try {
+      if (measurement.id) {
+        await updateMeasurement(selectedDatasetId, measurement.id, measurement);
+        message.success('Measurement updated');
+      } else {
+        await createMeasurement(selectedDatasetId, measurement);
+        message.success('Measurement created');
+      }
+      await loadMeasurements(selectedDatasetId);
+      setMeasurementModalVisible(false);
+      setEditingMeasurement(null);
+      measurementForm.resetFields();
+    } catch {
+      message.error('Failed to save measurement');
+    }
+  };
+
+  const removeMeasurement = async (id) => {
+    try {
+      await deleteMeasurement(selectedDatasetId, id);
+      message.success('Measurement deleted');
+      await loadMeasurements(selectedDatasetId);
+    } catch {
+      message.error('Failed to delete measurement');
+    }
+  };
+
+  // --- Effects ---
+
+  useEffect(() => {
+    loadFacilities();
+  }, [loadFacilities]);
+
+  useEffect(() => {
+    if (selectedFacilityId) {
+      loadDatasets(selectedFacilityId);
+      loadMeasurementNames();
+      setSelectedDatasetId(null);
+      setMeasurements([]);
+    } else {
+      setDatasets([]);
+      setMeasurementNames([]);
+      setSelectedDatasetId(null);
+      setMeasurements([]);
+    }
+  }, [selectedFacilityId, loadDatasets, loadMeasurementNames]);
+
+  useEffect(() => {
+    if (selectedDatasetId) {
+      loadMeasurements(selectedDatasetId);
+    } else {
+      setMeasurements([]);
+    }
+  }, [selectedDatasetId, loadMeasurements]);
+
+  // --- Modal openers ---
+
+  const openFacilityModal = (facility = null) => {
+    setEditingFacility(facility);
+    if (facility) facilityForm.setFieldsValue(facility);
+    else facilityForm.resetFields();
+    setFacilityModalVisible(true);
+  };
+
+  const openMeasurementNameModal = (mn = null) => {
+    setEditingMeasurementName(mn);
+    if (mn) measurementNameForm.setFieldsValue(mn);
+    else measurementNameForm.resetFields();
+    setMeasurementNameModalVisible(true);
+  };
+
+  const openDatasetModal = (dataset = null) => {
+    setEditingDataset(dataset);
+    if (dataset) datasetForm.setFieldsValue(dataset);
+    else datasetForm.resetFields();
+    setDatasetModalVisible(true);
+  };
+
+  const openMeasurementModal = (measurement = null) => {
+    setEditingMeasurement(measurement);
+    if (measurement) {
+      measurementForm.setFieldsValue({
+        ...measurement,
+        timestamp: dayjs(measurement.timestamp),
+        measurementNameIdMeasurementName: measurement.measurementNameIdMeasurementName?.id,
+        valueType: (() => {
+          if (measurement.valueFloat !== null && measurement.valueFloat !== undefined) return 'FLOAT';
+          if (measurement.valueInt !== null && measurement.valueInt !== undefined) return 'INT';
+          if (measurement.valueBool !== null && measurement.valueBool !== undefined) return 'BOOL';
+          return 'FLOAT';
+        })(),
+      });
+    } else {
+      measurementForm.resetFields();
+    }
+    setMeasurementModalVisible(true);
+  };
+
+  // --- Drag and Drop CSV upload for measurements ---
+
+  const [csvUploading, setCsvUploading] = useState(false);
+
+  const handleCSVUpload = ({ file }) => {
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+      try {
+        const text = e.target.result;
+        // Parse CSV (simple approach, can improve with libraries)
+        const lines = text.split('\n').filter(Boolean);
+        if (lines.length < 2) {
+          message.error('CSV must have header and at least one row');
+          return;
+        }
+        const headers = lines[0].split(',').map(h => h.trim());
+        const dataRows = lines.slice(1);
+        const createdMeasurements = [];
+        for (const line of dataRows) {
+          const values = line.split(',').map(v => v.trim());
+          const obj = {};
+          headers.forEach((h, i) => {
+            obj[h] = values[i];
+          });
+
+          // Convert types based on measurement names and dataset id
+          // Simplified: assumes columns: measurementNameIdMeasurementName,timestamp,valueFloat,valueInt,valueBool
+          const measurementPayload = {
+            datasetId: selectedDatasetId,
+            measurementNameIdMeasurementName: parseInt(obj['measurementNameIdMeasurementName']),
+            timestamp: new Date(obj['timestamp']),
+          };
+          if (obj['valueFloat']) measurementPayload.valueFloat = parseFloat(obj['valueFloat']);
+          else if (obj['valueInt']) measurementPayload.valueInt = parseInt(obj['valueInt']);
+          else if (obj['valueBool']) measurementPayload.valueBool = obj['valueBool'].toLowerCase() === 'true' ? 1 : 0;
+
+          await createMeasurement(selectedDatasetId, measurementPayload);
+          createdMeasurements.push(measurementPayload);
+        }
+        message.success(`Uploaded ${createdMeasurements.length} measurements`);
+        await loadMeasurements(selectedDatasetId);
+      } catch {
+        message.error('Failed to parse or upload CSV');
+      } finally {
+        setCsvUploading(false);
+      }
+    };
+    reader.readAsText(file);
+  };
+
+  // --- UI components ---
+
+  // Facilities list with blue buttons, improved UI
   const facilitiesContent = (
     <>
       <Button
         type="primary"
         icon={<PlusOutlined />}
-        onClick={() => showModal(null)}
-        style={{
-          marginBottom: 24,
-          backgroundColor: '#fadb14',
-          borderColor: '#fadb14',
-          color: '#004080',
-        }}
+        onClick={() => openFacilityModal()}
+        style={BUTTON_STYLE}
       >
         Add New Facility
       </Button>
 
       <Row gutter={[24, 24]}>
-        {facilities.length === 0 && (
+        {facilities.length === 0 ? (
           <Col span={24} style={{ textAlign: 'center', color: '#888' }}>
             No facilities added yet.
           </Col>
+        ) : (
+          facilities.map((facility) => (
+            <Col key={facility.id} xs={24} sm={12} md={8} lg={6}>
+              <Card
+                hoverable
+                title={facility.name}
+                extra={
+                  <>
+                    <Button
+                      type="primary"
+                      icon={<EditOutlined />}
+                      onClick={() => openFacilityModal(facility)}
+                      style={{ marginRight: 8, ...BUTTON_STYLE }}
+                    />
+                    <Button
+                      type="default"
+                      icon={<DeleteOutlined />}
+                      onClick={() => removeFacility(facility.id)}
+                      danger={false}
+                      style={{ color: '#ff4d4f', borderColor: '#ff4d4f' }}
+                    />
+                  </>
+                }
+                style={{ borderColor: '#1890ff', cursor: 'pointer' }}
+                headStyle={{ backgroundColor: '#1890ff', color: '#fff' }}
+                onClick={() => setSelectedFacilityId(facility.id)}
+                bordered={selectedFacilityId === facility.id}
+              >
+                <p><strong>Address:</strong> {facility.address}</p>
+                <p><strong>Type:</strong> {facility.type}</p>
+                <p><strong>Size:</strong> {facility.sizeSqm} sqm, {facility.floors} floors</p>
+                <p><strong>Contact:</strong> {facility.contactName} ({facility.contactPhone}, {facility.contactEmail})</p>
+              </Card>
+            </Col>
+          ))
         )}
-        {facilities.map((facility) => (
-          <Col key={facility.id} xs={24} sm={12} md={8} lg={6}>
-            <Card
-              hoverable
-              title={facility.name}
-              extra={
-                <Button
-                  type="text"
-                  icon={<EditOutlined />}
-                  onClick={() => showModal(facility)}
-                />
-              }
-              style={{ borderColor: '#fadb14' }}
-              headStyle={{ backgroundColor: '#fadb14', color: '#004080' }}
-            >
-              <p>
-                <strong>Address:</strong> {facility.address}
-              </p>
-              <p>
-                <strong>GPS Coordinates:</strong> {facility.gpsLat},{' '}
-                {facility.gpsLng}
-              </p>
-              <p>
-                <strong>Type:</strong> {facility.type}
-              </p>
-              <p>
-                <strong>Size:</strong> {facility.sizeSqm} sqm, {facility.floors}{' '}
-                floors
-              </p>
-              <p>
-                <strong>Contact:</strong> {facility.contactName} (
-                {facility.contactPhone}, {facility.contactEmail})
-              </p>
-              {facility.mlDataJson && (
-                <details style={{ marginTop: 8 }}>
-                  <summary style={{ cursor: 'pointer', color: '#004080' }}>
-                    View ML Data JSON
-                  </summary>
-                  <pre
-                    style={{
-                      whiteSpace: 'pre-wrap',
-                      maxHeight: 150,
-                      overflowY: 'auto',
-                      backgroundColor: '#f0f0f0',
-                      padding: '8px',
-                      borderRadius: 4,
-                      marginTop: 4,
-                    }}
-                  >
-                    {JSON.stringify(facility.mlDataJson, null, 2)}
-                  </pre>
-                </details>
-              )}
-            </Card>
-          </Col>
-        ))}
       </Row>
 
       <Modal
         title={editingFacility ? 'Edit Facility' : 'Add New Facility'}
-        visible={isModalVisible}
-        onCancel={handleCancel}
+        visible={facilityModalVisible}
+        onCancel={() => setFacilityModalVisible(false)}
         okText={editingFacility ? 'Save' : 'Add'}
-        onOk={() => form.submit()}
-        okButtonProps={{
-          style: {
-            backgroundColor: '#fadb14',
-            borderColor: '#fadb14',
-            color: '#004080',
-          },
-        }}
+        onOk={() => facilityForm.submit()}
+        okButtonProps={BUTTON_STYLE}
         width={700}
       >
-        <Form
-          form={form}
-          layout="vertical"
-          onFinish={handleAddOrEditFacility}
-          initialValues={{ type: 'Office' }}
-        >
+        <Form form={facilityForm} layout="vertical" onFinish={saveFacility} initialValues={{ type: 'Office' }}>
           <Form.Item
             label="Facility Name"
             name="name"
@@ -226,7 +479,6 @@ const Dashboard = () => {
           >
             <Input placeholder="Enter facility name" />
           </Form.Item>
-
           <Form.Item
             label="Address"
             name="address"
@@ -234,28 +486,6 @@ const Dashboard = () => {
           >
             <Input placeholder="Enter address" />
           </Form.Item>
-
-          <Row gutter={16}>
-            <Col span={12}>
-              <Form.Item
-                label="GPS Latitude"
-                name="gpsLat"
-                rules={[{ required: true, message: 'Please input GPS latitude!' }]}
-              >
-                <Input placeholder="Latitude" />
-              </Form.Item>
-            </Col>
-            <Col span={12}>
-              <Form.Item
-                label="GPS Longitude"
-                name="gpsLng"
-                rules={[{ required: true, message: 'Please input GPS longitude!' }]}
-              >
-                <Input placeholder="Longitude" />
-              </Form.Item>
-            </Col>
-          </Row>
-
           <Form.Item
             label="Facility Type"
             name="type"
@@ -263,13 +493,10 @@ const Dashboard = () => {
           >
             <Select>
               {facilityTypes.map((type) => (
-                <Option key={type} value={type}>
-                  {type}
-                </Option>
+                <Option key={type} value={type}>{type}</Option>
               ))}
             </Select>
           </Form.Item>
-
           <Row gutter={16}>
             <Col span={12}>
               <Form.Item
@@ -290,7 +517,6 @@ const Dashboard = () => {
               </Form.Item>
             </Col>
           </Row>
-
           <Form.Item
             label="Contact Person Name"
             name="contactName"
@@ -298,7 +524,6 @@ const Dashboard = () => {
           >
             <Input placeholder="Contact person name" />
           </Form.Item>
-
           <Form.Item
             label="Contact Phone"
             name="contactPhone"
@@ -306,7 +531,6 @@ const Dashboard = () => {
           >
             <Input placeholder="Phone number" />
           </Form.Item>
-
           <Form.Item
             label="Contact Email"
             name="contactEmail"
@@ -317,36 +541,396 @@ const Dashboard = () => {
           >
             <Input placeholder="Email address" />
           </Form.Item>
-
-          <Form.Item label="Upload ML Data JSON (optional)">
-            <Upload {...uploadProps}>
-              <Button icon={<UploadOutlined />}>Upload JSON</Button>
-            </Upload>
-          </Form.Item>
-
-          {mlData && (
-            <Card
-              size="small"
-              type="inner"
-              title="Loaded ML Data JSON"
-              style={{ maxHeight: 200, overflowY: 'auto', marginTop: 12 }}
-            >
-              <pre style={{ whiteSpace: 'pre-wrap' }}>
-                {JSON.stringify(mlData, null, 2)}
-              </pre>
-            </Card>
-          )}
         </Form>
       </Modal>
     </>
   );
 
-  const placeholderContent = (key) => (
-    <div style={{ textAlign: 'center', color: '#888', fontSize: 18, padding: 40 }}>
-      {key.charAt(0).toUpperCase() + key.slice(1)} content is not implemented yet.
-    </div>
+  // Measurement Names with unified blue theme and delete visible
+  const measurementNamesContent = (
+    <>
+      <Button
+        type="primary"
+        icon={<PlusOutlined />}
+        onClick={() => openMeasurementNameModal()}
+        style={BUTTON_STYLE}
+      >
+        Add Measurement Name
+      </Button>
+
+      <Row gutter={[24, 24]}>
+        {measurementNames.length === 0 ? (
+          <Col span={24} style={{ textAlign: 'center', color: '#888' }}>
+            No measurement names added yet.
+          </Col>
+        ) : (
+          measurementNames.map((mn) => (
+            <Col key={mn.id} xs={24} sm={12} md={8} lg={6}>
+              <Card
+                hoverable
+                title={mn.name}
+                extra={
+                  <>
+                    <Button
+                      type="primary"
+                      icon={<EditOutlined />}
+                      onClick={() => openMeasurementNameModal(mn)}
+                      style={{ marginRight: 8, ...BUTTON_STYLE }}
+                    />
+                    <Button
+                      type="default"
+                      icon={<DeleteOutlined />}
+                      onClick={() => removeMeasurementName(mn.id)}
+                      danger={false}
+                      style={{ color: '#ff4d4f', borderColor: '#ff4d4f' }}
+                    />
+                  </>
+                }
+                style={{ borderColor: '#1890ff', cursor: 'pointer' }}
+                headStyle={{ backgroundColor: '#1890ff', color: '#fff' }}
+              >
+                <p><strong>Unit:</strong> {mn.unit}</p>
+                <p><strong>Data Type:</strong> {mn.dataType}</p>
+              </Card>
+            </Col>
+          ))
+        )}
+      </Row>
+
+      <Modal
+        title={editingMeasurementName ? 'Edit Measurement Name' : 'Add Measurement Name'}
+        visible={measurementNameModalVisible}
+        onCancel={() => setMeasurementNameModalVisible(false)}
+        okText={editingMeasurementName ? 'Save' : 'Add'}
+        onOk={() => measurementNameForm.submit()}
+        okButtonProps={BUTTON_STYLE}
+        width={600}
+      >
+        <Form form={measurementNameForm} layout="vertical" onFinish={saveMeasurementName}>
+          <Form.Item
+            label="Measurement Name"
+            name="name"
+            rules={[{ required: true, message: 'Please input measurement name!' }]}
+          >
+            <Input placeholder="e.g. Temperature" />
+          </Form.Item>
+          <Form.Item
+            label="Unit"
+            name="unit"
+            rules={[{ required: true, message: 'Please input unit!' }]}
+          >
+            <Input placeholder="e.g. °C" />
+          </Form.Item>
+          <Form.Item
+            label="Data Type"
+            name="dataType"
+            rules={[{ required: true, message: 'Please select data type!' }]}
+          >
+            <Radio.Group>
+              {dataTypes.map((type) => (
+                <Radio key={type} value={type}>{type}</Radio>
+              ))}
+            </Radio.Group>
+          </Form.Item>
+        </Form>
+      </Modal>
+    </>
   );
 
+  // Datasets with blue theme and clean UI
+  const datasetsContent = (
+    <>
+      <Button
+        type="primary"
+        icon={<PlusOutlined />}
+        disabled={!selectedFacilityId}
+        onClick={() => openDatasetModal()}
+        style={BUTTON_STYLE}
+      >
+        Add Dataset
+      </Button>
+
+      <Row gutter={[24, 24]}>
+        {datasets.length === 0 ? (
+          <Col span={24} style={{ textAlign: 'center', color: '#888' }}>
+            No datasets added yet.
+          </Col>
+        ) : (
+          datasets.map((ds) => (
+            <Col key={ds.id} xs={24} sm={12} md={8} lg={6}>
+              <Card
+                hoverable
+                title={ds.source || 'Unnamed Dataset'}
+                extra={
+                  <>
+                    <Button
+                      type="primary"
+                      icon={<EditOutlined />}
+                      onClick={() => openDatasetModal(ds)}
+                      style={{ marginRight: 8, ...BUTTON_STYLE }}
+                    />
+                    <Button
+                      type="default"
+                      icon={<DeleteOutlined />}
+                      onClick={() => removeDataset(ds.id)}
+                      danger={false}
+                      style={{ color: '#ff4d4f', borderColor: '#ff4d4f' }}
+                    />
+                  </>
+                }
+                style={{ borderColor: '#1890ff', cursor: 'pointer' }}
+                headStyle={{ backgroundColor: '#1890ff', color: '#fff' }}
+                onClick={() => setSelectedDatasetId(ds.id)}
+                bordered={selectedDatasetId === ds.id}
+              >
+                <p><strong>Created At:</strong> {dayjs(ds.createdAt).format('YYYY-MM-DD HH:mm')}</p>
+              </Card>
+            </Col>
+          ))
+        )}
+      </Row>
+
+      <Modal
+        title={editingDataset ? 'Edit Dataset' : 'Add Dataset'}
+        visible={datasetModalVisible}
+        onCancel={() => setDatasetModalVisible(false)}
+        okText={editingDataset ? 'Save' : 'Add'}
+        onOk={() => datasetForm.submit()}
+        okButtonProps={BUTTON_STYLE}
+        width={600}
+      >
+        <Form form={datasetForm} layout="vertical" onFinish={saveDataset}>
+          <Form.Item
+            label="Source"
+            name="source"
+            rules={[{ required: true, message: 'Please input source!' }]}
+          >
+            <Input placeholder="Source name or description" />
+          </Form.Item>
+          <Form.Item
+            label="Created At"
+            name="createdAt"
+            rules={[{ required: true, message: 'Please select created date!' }]}
+          >
+            <DatePicker showTime format="YYYY-MM-DD HH:mm" />
+          </Form.Item>
+        </Form>
+      </Modal>
+    </>
+  );
+
+  // Measurements with drag & drop CSV upload and virtualized table for performance
+  const measurementsColumns = [
+    {
+      title: 'Measurement Name',
+      dataIndex: ['measurementNameIdMeasurementName', 'name'],
+      key: 'name',
+      sorter: (a, b) => a.measurementNameIdMeasurementName.name.localeCompare(b.measurementNameIdMeasurementName.name),
+    },
+    {
+      title: 'Timestamp',
+      dataIndex: 'timestamp',
+      key: 'timestamp',
+      render: (val) => dayjs(val).format('YYYY-MM-DD HH:mm:ss'),
+      sorter: (a, b) => dayjs(a.timestamp).unix() - dayjs(b.timestamp).unix(),
+      defaultSortOrder: 'descend',
+    },
+    {
+      title: 'Value',
+      dataIndex: '',
+      key: 'value',
+      render: (_, record) => {
+        if (record.valueFloat !== null && record.valueFloat !== undefined) return record.valueFloat;
+        if (record.valueInt !== null && record.valueInt !== undefined) return record.valueInt;
+        if (record.valueBool !== null && record.valueBool !== undefined)
+          return record.valueBool === 1 ? 'True' : 'False';
+        return 'N/A';
+      },
+      sorter: (a, b) => {
+        const valA = a.valueFloat ?? a.valueInt ?? (a.valueBool === 1 ? 1 : 0);
+        const valB = b.valueFloat ?? b.valueInt ?? (b.valueBool === 1 ? 1 : 0);
+        return valA - valB;
+      },
+    },
+    {
+      title: 'Actions',
+      key: 'actions',
+      fixed: 'right',
+      width: 120,
+      render: (_, record) => (
+        <>
+          <Button
+            type="primary"
+            icon={<EditOutlined />}
+            size="small"
+            style={{ marginRight: 8, ...BUTTON_STYLE }}
+            onClick={() => openMeasurementModal(record)}
+          />
+          <Button
+            type="default"
+            icon={<DeleteOutlined />}
+            size="small"
+            danger={false}
+            style={{ color: '#ff4d4f', borderColor: '#ff4d4f' }}
+            onClick={() => removeMeasurement(record.id)}
+          />
+        </>
+      ),
+    },
+  ];
+
+  const measurementsContent = (
+    <>
+      <Row justify="space-between" align="middle" style={{ marginBottom: 16 }}>
+        <Col>
+          <Button
+            type="primary"
+            icon={<PlusOutlined />}
+            disabled={!selectedDatasetId || measurementNames.length === 0}
+            onClick={() => openMeasurementModal()}
+            style={BUTTON_STYLE}
+          >
+            Add Measurement
+          </Button>
+        </Col>
+        <Col>
+          <Upload
+            accept=".csv,text/csv"
+            beforeUpload={(file) => {
+              setCsvUploading(true);
+              handleCSVUpload({ file });
+              return false;
+            }}
+            showUploadList={false}
+            disabled={!selectedDatasetId}
+          >
+            <Button icon={<UploadOutlined />} loading={csvUploading} style={BUTTON_STYLE}>
+              Upload CSV
+            </Button>
+          </Upload>
+        </Col>
+      </Row>
+
+      <Table
+        columns={measurementsColumns}
+        dataSource={measurements}
+        rowKey="id"
+        pagination={{ pageSize: 50 }}
+        scroll={{ y: 400 }}
+        size="middle"
+      />
+
+      <Modal
+        title={editingMeasurement ? 'Edit Measurement' : 'Add Measurement'}
+        visible={measurementModalVisible}
+        onCancel={() => setMeasurementModalVisible(false)}
+        okText={editingMeasurement ? 'Save' : 'Add'}
+        onOk={() => measurementForm.submit()}
+        okButtonProps={BUTTON_STYLE}
+        width={600}
+      >
+        <Form form={measurementForm} layout="vertical" onFinish={saveMeasurement} initialValues={{ valueType: 'FLOAT' }}>
+          <Form.Item
+            label="Measurement Name"
+            name="measurementNameIdMeasurementName"
+            rules={[{ required: true, message: 'Please select measurement name!' }]}
+          >
+            <Select placeholder="Select measurement name" showSearch optionFilterProp="children" filterOption={(input, option) =>
+              option.children.toLowerCase().indexOf(input.toLowerCase()) >= 0
+            }>
+              {measurementNames.map((mn) => (
+                <Option key={mn.id} value={mn.id}>{mn.name}</Option>
+              ))}
+            </Select>
+          </Form.Item>
+
+          <Form.Item
+            label="Timestamp"
+            name="timestamp"
+            rules={[{ required: true, message: 'Please select timestamp!' }]}
+          >
+            <DatePicker showTime format="YYYY-MM-DD HH:mm:ss" style={{ width: '100%' }} />
+          </Form.Item>
+
+          <Form.Item
+            label="Value Type"
+            name="valueType"
+            rules={[{ required: true, message: 'Please select value type!' }]}
+          >
+            <Radio.Group
+              onChange={(e) => {
+                measurementForm.setFieldsValue({
+                  valueFloat: null,
+                  valueInt: null,
+                  valueBool: null,
+                });
+              }}
+              optionType="button"
+              buttonStyle="solid"
+            >
+              <Radio value="FLOAT">Float</Radio>
+              <Radio value="INT">Integer</Radio>
+              <Radio value="BOOL">Boolean</Radio>
+            </Radio.Group>
+          </Form.Item>
+
+          <Form.Item noStyle shouldUpdate={(prev, curr) => prev.valueType !== curr.valueType}>
+            {({ getFieldValue }) => {
+              const valType = getFieldValue('valueType');
+              if (valType === 'FLOAT') {
+                return (
+                  <Form.Item
+                    label="Float Value"
+                    name="valueFloat"
+                    rules={[{ required: true, message: 'Please input float value!' }]}
+                  >
+                    <Input type="number" step="any" />
+                  </Form.Item>
+                );
+              }
+              if (valType === 'INT') {
+                return (
+                  <Form.Item
+                    label="Integer Value"
+                    name="valueInt"
+                    rules={[{ required: true, message: 'Please input integer value!' }]}
+                  >
+                    <Input type="number" step="1" />
+                  </Form.Item>
+                );
+              }
+              if (valType === 'BOOL') {
+                return (
+                  <Form.Item
+                    label="Boolean Value"
+                    name="valueBool"
+                    valuePropName="checked"
+                    rules={[{ required: true, message: 'Please select boolean value!' }]}
+                  >
+                    <Radio.Group>
+                      <Radio value={true}>True</Radio>
+                      <Radio value={false}>False</Radio>
+                    </Radio.Group>
+                  </Form.Item>
+                );
+              }
+              return null;
+            }}
+          </Form.Item>
+        </Form>
+      </Modal>
+    </>
+  );
+
+  // --- Content map for sidebar selection ---
+  const contentMap = {
+    facilities: facilitiesContent,
+    measurementNames: measurementNamesContent,
+    datasets: datasetsContent,
+    measurements: measurementsContent,
+  };
+
+  // --- Main Layout ---
   return (
     <Layout style={{ minHeight: '100vh', backgroundColor: '#e6f7ff' }}>
       <Header style={{ padding: 0, backgroundColor: '#004080' }}>
@@ -364,19 +948,30 @@ const Dashboard = () => {
             theme="dark"
             mode="inline"
             selectedKeys={[selectedKey]}
-            onClick={handleMenuClick}
+            onClick={(e) => setSelectedKey(e.key)}
             style={{ height: '100%', borderRight: 0 }}
           >
             <Menu.Item key="facilities" icon={<HomeOutlined />}>
               Facilities
             </Menu.Item>
-            <Menu.Item key="users" icon={<UserOutlined />}>
-              Users
+            <Menu.Item key="measurementNames" icon={<ProfileOutlined />}>
+              Custom Fields
             </Menu.Item>
-            <Menu.Item key="analytics" icon={<BarChartOutlined />}>
-              Analytics
+            <Menu.Item
+              key="datasets"
+              icon={<DatabaseOutlined />}
+              disabled={!selectedFacilityId}
+            >
+              Datasets
             </Menu.Item>
-            <Menu.Item key="settings" icon={<SettingOutlined />}>
+            <Menu.Item
+              key="measurements"
+              icon={<BarChartOutlined />}
+              disabled={!selectedDatasetId}
+            >
+              Measurements
+            </Menu.Item>
+            <Menu.Item key="settings" icon={<SettingOutlined />} disabled>
               Settings
             </Menu.Item>
           </Menu>
@@ -387,7 +982,7 @@ const Dashboard = () => {
               padding: 24,
               margin: 0,
               minHeight: 280,
-              backgroundColor: '#ffffff',
+              backgroundColor: '#fff',
               borderRadius: 8,
               boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
             }}
@@ -395,9 +990,11 @@ const Dashboard = () => {
             <Title level={2} style={{ color: '#004080', marginBottom: 24 }}>
               {selectedKey === 'facilities'
                 ? 'Your Facilities'
+                : selectedKey === 'measurementNames'
+                ? 'Custom Measurement Fields'
                 : selectedKey.charAt(0).toUpperCase() + selectedKey.slice(1)}
             </Title>
-            {selectedKey === 'facilities' ? facilitiesContent : placeholderContent(selectedKey)}
+            {contentMap[selectedKey]}
           </Content>
         </Layout>
       </Layout>
@@ -406,3 +1003,4 @@ const Dashboard = () => {
 };
 
 export default Dashboard;
+

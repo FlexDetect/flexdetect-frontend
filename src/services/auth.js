@@ -1,11 +1,10 @@
 import axios from 'axios';
 import { jwtDecode } from 'jwt-decode';
-const API_URL = 'http://localhost:8080/api';
+const API_URL_USER_SERVICE = 'http://localhost:8080/api';
 
+// TODO: Premakni JWT izven localStorage za boljšo varnost
 export async function login(email, password) {
-  const response = await axios.post(`${API_URL}/users/login`, { email, password });
-
-  //console.log('Login response:', response)
+  const response = await axios.post(`${API_URL_USER_SERVICE}/users/login`, { email, password });
 
   if (response.data) {
     localStorage.setItem('token', response.data);
@@ -14,7 +13,7 @@ export async function login(email, password) {
 }
 
 export async function register(email, password) {
-  const response = await axios.post(`${API_URL}/users/register`, { email, password });
+  const response = await axios.post(`${API_URL_USER_SERVICE}/users/register`, { email, password });
 
   if (response.data) {
     localStorage.setItem('token', response.data);
