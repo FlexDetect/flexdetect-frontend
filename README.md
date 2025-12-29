@@ -44,7 +44,6 @@ Spletni uporabniški vmesnik FlexDetect omogoča interaktivno upravljanje sistem
 ## Integracija z API-ji
 - Komunikacija preko REST protokola z mikrostoritvami backend-a
 - Avtomatsko obnavljanje JWT tokenov
-- 
 ---
 
 **Avtor:** Aljaž Brodar  
