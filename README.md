@@ -16,7 +16,6 @@ Cilj projekta je identifikacija in estimacija aktivnosti odziva na povpraševanj
 - [Arhitektura in struktura](#arhitektura-in-struktura)
 - [Glavne funkcionalnosti](#glavne-funkcionalnosti)
 - [Integracija z API-ji](#integracija-z-api-ji)
-- [Uporabniška izkušnja](#uporabniška-izkušnja)
 
 
 ---
@@ -45,15 +44,7 @@ Spletni uporabniški vmesnik FlexDetect omogoča interaktivno upravljanje sistem
 ## Integracija z API-ji
 - Komunikacija preko REST protokola z mikrostoritvami backend-a
 - Avtomatsko obnavljanje JWT tokenov
-- Napredno upravljanje napak in prikaz sporočil uporabniku
-
+- 
 ---
 
-## Uporabniška izkušnja
-- Hitro in tekoče nalaganje strani
-- Intuitiven dizajn za minimalno učno krivuljo
-- Podpora za večjezičnost (trenutno Slovenščina in angleščina)
-
-
 **Avtor:** Aljaž Brodar  
-**Zadnja posodobitev:** 1. december 2025
