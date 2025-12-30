@@ -39,22 +39,22 @@ export async function deleteFacility(id) {
 
 // Measurement Names endpoints
 export async function fetchMeasurementNames() {
-  const response = await dataServiceClient.get('/measurement-name');
+  const response = await dataServiceClient.get('/measurement-names');
   return response.data;
 }
 
 export async function createMeasurementName(measurementName) {
-  const response = await dataServiceClient.post('/measurement-name', measurementName);
+  const response = await dataServiceClient.post('/measurement-names', measurementName);
   return response.data;
 }
 
 export async function updateMeasurementName(id, measurementName) {
-  const response = await dataServiceClient.put(`/measurement-name/${id}`, measurementName);
+  const response = await dataServiceClient.put(`/measurement-names/${id}`, measurementName);
   return response.data;
 }
 
 export async function deleteMeasurementName(id) {
-  await dataServiceClient.delete(`/measurement-name/${id}`);
+  await dataServiceClient.delete(`/measurement-names/${id}`);
 }
 
 // Datasets endpoints (facility scoped)

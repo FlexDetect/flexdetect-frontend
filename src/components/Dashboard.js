@@ -123,20 +123,16 @@ const Dashboard = () => {
     async (facilityId) => {
       if (!facilityId) {
         setDatasets([]);
-        setSelectedDatasetId(null);
         return;
       }
       try {
         const data = await fetchDatasets(facilityId);
         setDatasets(data);
-        if (!selectedDatasetId && data.length > 0) {
-          setSelectedDatasetId(data[0].id);
-        }
       } catch {
         message.error('Failed to load datasets');
       }
     },
-    [selectedDatasetId]
+    []
   );
 
   const loadMeasurements = useCallback(
@@ -159,6 +155,7 @@ const Dashboard = () => {
 
   // Facilities
   const saveFacility = async (facility) => {
+    console.log('SAVE FACILITY FIRED', facility);
     try {
       if (facility.id) {
         await updateFacility(facility.id, facility);
@@ -194,6 +191,7 @@ const Dashboard = () => {
 
   // Measurement Names (Custom Fields)
   const saveMeasurementName = async (mn) => {
+    console.log('SAVE MEASUREMENT NAME FIRED', mn); 
     try {
       if (mn.id) {
         await updateMeasurementName(mn.id, mn);
@@ -223,6 +221,7 @@ const Dashboard = () => {
 
   // Datasets
   const saveDataset = async (dataset) => {
+    console.log('SAVE DATASET FIRED', dataset);
     try {
       if (dataset.id) {
         await updateDataset(selectedFacilityId, dataset.id, dataset);
@@ -328,9 +327,14 @@ const Dashboard = () => {
   };
 
   const openDatasetModal = (dataset = null) => {
-    setEditingDataset(dataset);
-    if (dataset) datasetForm.setFieldsValue(dataset);
-    else datasetForm.resetFields();
+    if (dataset) {
+      datasetForm.setFieldsValue({
+        ...dataset,
+        createdAt: dataset.createdAt ? dayjs(dataset.createdAt) : null,
+      });
+    } else {
+      datasetForm.resetFields();
+    }
     setDatasetModalVisible(true);
   };
 
@@ -358,52 +362,91 @@ const Dashboard = () => {
 
   const [csvUploading, setCsvUploading] = useState(false);
 
-  const handleCSVUpload = ({ file }) => {
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = async (e) => {
-      try {
-        const text = e.target.result;
-        // Parse CSV (simple approach, can improve with libraries)
-        const lines = text.split('\n').filter(Boolean);
-        if (lines.length < 2) {
-          message.error('CSV must have header and at least one row');
-          return;
-        }
-        const headers = lines[0].split(',').map(h => h.trim());
-        const dataRows = lines.slice(1);
-        const createdMeasurements = [];
-        for (const line of dataRows) {
-          const values = line.split(',').map(v => v.trim());
-          const obj = {};
-          headers.forEach((h, i) => {
-            obj[h] = values[i];
-          });
+const handleCSVUpload = ({ file }) => {
+  if (!file || !selectedDatasetId) return;
 
-          // Convert types based on measurement names and dataset id
-          // Simplified: assumes columns: measurementNameIdMeasurementName,timestamp,valueFloat,valueInt,valueBool
-          const measurementPayload = {
-            datasetId: selectedDatasetId,
-            measurementNameIdMeasurementName: parseInt(obj['measurementNameIdMeasurementName']),
-            timestamp: new Date(obj['timestamp']),
-          };
-          if (obj['valueFloat']) measurementPayload.valueFloat = parseFloat(obj['valueFloat']);
-          else if (obj['valueInt']) measurementPayload.valueInt = parseInt(obj['valueInt']);
-          else if (obj['valueBool']) measurementPayload.valueBool = obj['valueBool'].toLowerCase() === 'true' ? 1 : 0;
+  const reader = new FileReader();
+  reader.onload = async (e) => {
+    setCsvUploading(true);
+    try {
+      const text = e.target.result;
+      const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
 
-          await createMeasurement(selectedDatasetId, measurementPayload);
-          createdMeasurements.push(measurementPayload);
-        }
-        message.success(`Uploaded ${createdMeasurements.length} measurements`);
-        await loadMeasurements(selectedDatasetId);
-      } catch {
-        message.error('Failed to parse or upload CSV');
-      } finally {
+      if (lines.length < 2) {
+        message.error('CSV must have header and at least one data row');
         setCsvUploading(false);
+        return;
       }
-    };
-    reader.readAsText(file);
+
+      const headers = lines[0].split(',').map(h => h.trim());
+
+      // Enforce exact presence of "Timestamp_Local"
+      const timestampIdx = headers.indexOf('Timestamp_Local');
+      if (timestampIdx === -1) {
+        message.error('CSV must contain "Timestamp_Local" column exactly');
+        setCsvUploading(false);
+        return;
+      }
+
+      // Map column index → measurementName by exact name match
+      const columnMap = {};
+      headers.forEach((h, idx) => {
+        if (idx === timestampIdx) return;
+        const mn = measurementNames.find(m => m.name === h);
+        if (mn) columnMap[idx] = mn;
+      });
+
+      if (Object.keys(columnMap).length === 0) {
+        message.error('No CSV columns match measurement names exactly');
+        setCsvUploading(false);
+        return;
+      }
+
+      let created = 0;
+
+      for (let i = 1; i < lines.length; i++) {
+        const values = lines[i].split(',').map(v => v.trim());
+        if (values.length !== headers.length) {
+          // Skip malformed row
+          continue;
+        }
+
+        const timestamp = dayjs(values[timestampIdx]).toISOString();
+
+        for (const [idxStr, mn] of Object.entries(columnMap)) {
+          const idx = Number(idxStr);
+          const raw = values[idx];
+          if (raw === '' || raw == null) continue;
+
+          const payload = {
+            measurementNameIdMeasurementName: mn.id,
+            timestamp,
+          };
+
+          if (mn.dataType === 'FLOAT') payload.valueFloat = Number(raw);
+          else if (mn.dataType === 'INT') payload.valueInt = Number(raw);
+          else if (mn.dataType === 'BOOL')
+            payload.valueBool = raw.toLowerCase() === 'true' ? 1 : 0;
+
+          await createMeasurement(selectedDatasetId, payload);
+          created++;
+        }
+      }
+
+      message.success(`Uploaded ${created} measurements`);
+      await loadMeasurements(selectedDatasetId);
+    } catch (err) {
+      console.error(err);
+      message.error('CSV upload failed');
+    } finally {
+      setCsvUploading(false);
+    }
   };
+
+  reader.readAsText(file);
+};
+
+
 
   // --- UI components ---
 
@@ -414,10 +457,11 @@ const Dashboard = () => {
         type="primary"
         icon={<PlusOutlined />}
         onClick={() => openFacilityModal()}
-        style={BUTTON_STYLE}
+        style={{ ...BUTTON_STYLE, marginBottom: 16 }}  // Add marginBottom here
       >
         Add New Facility
       </Button>
+
 
       <Row gutter={[24, 24]}>
         {facilities.length === 0 ? (
@@ -454,7 +498,7 @@ const Dashboard = () => {
               >
                 <p><strong>Address:</strong> {facility.address}</p>
                 <p><strong>Type:</strong> {facility.type}</p>
-                <p><strong>Size:</strong> {facility.sizeSqm} sqm, {facility.floors} floors</p>
+                <p><strong>Size:</strong> {facility.size} sqm, {facility.floors} floors</p>
                 <p><strong>Contact:</strong> {facility.contactName} ({facility.contactPhone}, {facility.contactEmail})</p>
               </Card>
             </Col>
@@ -464,7 +508,7 @@ const Dashboard = () => {
 
       <Modal
         title={editingFacility ? 'Edit Facility' : 'Add New Facility'}
-        visible={facilityModalVisible}
+        open={facilityModalVisible}
         onCancel={() => setFacilityModalVisible(false)}
         okText={editingFacility ? 'Save' : 'Add'}
         onOk={() => facilityForm.submit()}
@@ -472,6 +516,10 @@ const Dashboard = () => {
         width={700}
       >
         <Form form={facilityForm} layout="vertical" onFinish={saveFacility} initialValues={{ type: 'Office' }}>
+          <Form.Item name="id" style={{ display: 'none' }}>
+            <Input type="hidden" />
+          </Form.Item>
+
           <Form.Item
             label="Facility Name"
             name="name"
@@ -501,7 +549,7 @@ const Dashboard = () => {
             <Col span={12}>
               <Form.Item
                 label="Size (sqm)"
-                name="sizeSqm"
+                name="size"
                 rules={[{ required: true, message: 'Please input size in sqm!' }]}
               >
                 <Input type="number" min={0} placeholder="Square meters" />
@@ -553,7 +601,7 @@ const Dashboard = () => {
         type="primary"
         icon={<PlusOutlined />}
         onClick={() => openMeasurementNameModal()}
-        style={BUTTON_STYLE}
+        style={{ ...BUTTON_STYLE, marginBottom: 16 }} 
       >
         Add Measurement Name
       </Button>
@@ -607,6 +655,9 @@ const Dashboard = () => {
         width={600}
       >
         <Form form={measurementNameForm} layout="vertical" onFinish={saveMeasurementName}>
+          <Form.Item name="id" style={{ display: 'none' }}>
+          <Input type="hidden" />
+        </Form.Item>
           <Form.Item
             label="Measurement Name"
             name="name"
@@ -645,7 +696,7 @@ const Dashboard = () => {
         icon={<PlusOutlined />}
         disabled={!selectedFacilityId}
         onClick={() => openDatasetModal()}
-        style={BUTTON_STYLE}
+        style={{ ...BUTTON_STYLE, marginBottom: 16 }}
       >
         Add Dataset
       </Button>
@@ -692,14 +743,17 @@ const Dashboard = () => {
 
       <Modal
         title={editingDataset ? 'Edit Dataset' : 'Add Dataset'}
-        visible={datasetModalVisible}
+        open={datasetModalVisible}
         onCancel={() => setDatasetModalVisible(false)}
         okText={editingDataset ? 'Save' : 'Add'}
         onOk={() => datasetForm.submit()}
         okButtonProps={BUTTON_STYLE}
         width={600}
       >
-        <Form form={datasetForm} layout="vertical" onFinish={saveDataset}>
+        <Form form={datasetForm} layout="vertical" onFinish={saveDataset}  onFinishFailed={(errorInfo) => console.log('Validation Failed:', errorInfo)}>
+          <Form.Item name="id" style={{ display: 'none' }}>
+            <Input type="hidden" />
+          </Form.Item>
           <Form.Item
             label="Source"
             name="source"
@@ -822,7 +876,7 @@ const Dashboard = () => {
 
       <Modal
         title={editingMeasurement ? 'Edit Measurement' : 'Add Measurement'}
-        visible={measurementModalVisible}
+        open={measurementModalVisible}
         onCancel={() => setMeasurementModalVisible(false)}
         okText={editingMeasurement ? 'Save' : 'Add'}
         onOk={() => measurementForm.submit()}
@@ -830,6 +884,9 @@ const Dashboard = () => {
         width={600}
       >
         <Form form={measurementForm} layout="vertical" onFinish={saveMeasurement} initialValues={{ valueType: 'FLOAT' }}>
+          <Form.Item name="id" style={{ display: 'none' }}>
+            <Input type="hidden" />
+          </Form.Item>
           <Form.Item
             label="Measurement Name"
             name="measurementNameIdMeasurementName"
