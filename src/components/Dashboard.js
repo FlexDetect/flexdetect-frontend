@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   Layout,
   Menu,
@@ -254,23 +254,51 @@ const Dashboard = () => {
   };
 
   // Measurements
-  const saveMeasurement = async (measurement) => {
-    try {
-      if (measurement.id) {
-        await updateMeasurement(selectedDatasetId, measurement.id, measurement);
-        message.success('Measurement updated');
-      } else {
-        await createMeasurement(selectedDatasetId, measurement);
-        message.success('Measurement created');
-      }
-      await loadMeasurements(selectedDatasetId);
-      setMeasurementModalVisible(false);
-      setEditingMeasurement(null);
-      measurementForm.resetFields();
-    } catch {
-      message.error('Failed to save measurement');
+const saveMeasurement = async (formValues) => {
+  console.log('SAVE MEASUREMENT FIRED', formValues);
+  if (!selectedDatasetId) {
+    message.error('No dataset selected');
+    return;
+  }
+
+  try {
+    const payload = {
+      measurementNameId: formValues.measurementNameId,
+      timestamp: formValues.timestamp.toISOString(),
+    };
+
+    switch (formValues.valueType) {
+      case 'FLOAT':
+        payload.valueFloat = parseFloat(formValues.valueFloat);
+        break;
+      case 'INT':
+        payload.valueInt = parseInt(formValues.valueInt, 10);
+        break;
+      case 'BOOL':
+        payload.valueBool = formValues.valueBool ? 1 : 0;
+        break;
+      default:
+        throw new Error('Invalid valueType');
     }
-  };
+
+    if (editingMeasurement) {
+      await updateMeasurement(selectedDatasetId, editingMeasurement.id, payload);
+      message.success('Measurement updated');
+    } else {
+      await createMeasurement(selectedDatasetId, payload);
+      message.success('Measurement created');
+    }
+
+    await loadMeasurements(selectedDatasetId);
+    setMeasurementModalVisible(false);
+    setEditingMeasurement(null);
+    measurementForm.resetFields();
+  } catch (error) {
+    console.error(error);
+    message.error('Failed to save measurement');
+  }
+};
+
 
   const removeMeasurement = async (id) => {
     try {
@@ -344,7 +372,7 @@ const Dashboard = () => {
       measurementForm.setFieldsValue({
         ...measurement,
         timestamp: dayjs(measurement.timestamp),
-        measurementNameIdMeasurementName: measurement.measurementNameIdMeasurementName?.id,
+        measurementNameId: measurement.measurementNameId?.id,
         valueType: (() => {
           if (measurement.valueFloat !== null && measurement.valueFloat !== undefined) return 'FLOAT';
           if (measurement.valueInt !== null && measurement.valueInt !== undefined) return 'INT';
@@ -419,7 +447,7 @@ const handleCSVUpload = ({ file }) => {
           if (raw === '' || raw == null) continue;
 
           const payload = {
-            measurementNameIdMeasurementName: mn.id,
+            measurementNameId: mn.id,
             timestamp,
           };
 
@@ -774,64 +802,74 @@ const handleCSVUpload = ({ file }) => {
   );
 
   // Measurements with drag & drop CSV upload and virtualized table for performance
-  const measurementsColumns = [
-    {
-      title: 'Measurement Name',
-      dataIndex: ['measurementNameIdMeasurementName', 'name'],
-      key: 'name',
-      sorter: (a, b) => a.measurementNameIdMeasurementName.name.localeCompare(b.measurementNameIdMeasurementName.name),
+// Assume you have measurementNames array from your fetch:
+const measurementNameMap = useMemo(() => {
+  const map = {};
+  measurementNames.forEach(mn => {
+    map[mn.id_measurement_name] = mn;
+  });
+  return map;
+}, [measurementNames]);
+
+const measurementsColumns = [
+  {
+    title: 'Measurement Name',
+    dataIndex: ['measurementNameIdMeasurementName', 'name'],
+    key: 'name',
+    sorter: (a, b) => a.measurementNameIdMeasurementName.name.localeCompare(b.measurementNameIdMeasurementName.name),
+  },
+  {
+    title: 'Timestamp',
+    dataIndex: 'timestamp',
+    key: 'timestamp',
+    render: (val) => dayjs(val).format('YYYY-MM-DD HH:mm:ss'),
+    sorter: (a, b) => dayjs(a.timestamp).unix() - dayjs(b.timestamp).unix(),
+    defaultSortOrder: 'descend',
+  },
+  {
+    title: 'Value',
+    dataIndex: '',
+    key: 'value',
+    render: (_, record) => {
+      if (record.valueFloat !== null && record.valueFloat !== undefined) return record.valueFloat;
+      if (record.valueInt !== null && record.valueInt !== undefined) return record.valueInt;
+      if (record.valueBool !== null && record.valueBool !== undefined)
+        return record.valueBool === 1 ? 'True' : 'False';
+      return 'N/A';
     },
-    {
-      title: 'Timestamp',
-      dataIndex: 'timestamp',
-      key: 'timestamp',
-      render: (val) => dayjs(val).format('YYYY-MM-DD HH:mm:ss'),
-      sorter: (a, b) => dayjs(a.timestamp).unix() - dayjs(b.timestamp).unix(),
-      defaultSortOrder: 'descend',
+    sorter: (a, b) => {
+      const valA = a.valueFloat ?? a.valueInt ?? (a.valueBool === 1 ? 1 : 0);
+      const valB = b.valueFloat ?? b.valueInt ?? (b.valueBool === 1 ? 1 : 0);
+      return valA - valB;
     },
-    {
-      title: 'Value',
-      dataIndex: '',
-      key: 'value',
-      render: (_, record) => {
-        if (record.valueFloat !== null && record.valueFloat !== undefined) return record.valueFloat;
-        if (record.valueInt !== null && record.valueInt !== undefined) return record.valueInt;
-        if (record.valueBool !== null && record.valueBool !== undefined)
-          return record.valueBool === 1 ? 'True' : 'False';
-        return 'N/A';
-      },
-      sorter: (a, b) => {
-        const valA = a.valueFloat ?? a.valueInt ?? (a.valueBool === 1 ? 1 : 0);
-        const valB = b.valueFloat ?? b.valueInt ?? (b.valueBool === 1 ? 1 : 0);
-        return valA - valB;
-      },
-    },
-    {
-      title: 'Actions',
-      key: 'actions',
-      fixed: 'right',
-      width: 120,
-      render: (_, record) => (
-        <>
-          <Button
-            type="primary"
-            icon={<EditOutlined />}
-            size="small"
-            style={{ marginRight: 8, ...BUTTON_STYLE }}
-            onClick={() => openMeasurementModal(record)}
-          />
-          <Button
-            type="default"
-            icon={<DeleteOutlined />}
-            size="small"
-            danger={false}
-            style={{ color: '#ff4d4f', borderColor: '#ff4d4f' }}
-            onClick={() => removeMeasurement(record.id)}
-          />
-        </>
-      ),
-    },
-  ];
+  },
+  {
+    title: 'Actions',
+    key: 'actions',
+    fixed: 'right',
+    width: 120,
+    render: (_, record) => (
+      <>
+        <Button
+          type="primary"
+          icon={<EditOutlined />}
+          size="small"
+          style={{ marginRight: 8, ...BUTTON_STYLE }}
+          onClick={() => openMeasurementModal(record)}
+        />
+        <Button
+          type="default"
+          icon={<DeleteOutlined />}
+          size="small"
+          danger={false}
+          style={{ color: '#ff4d4f', borderColor: '#ff4d4f' }}
+          onClick={() => removeMeasurement(record.id)}
+        />
+      </>
+    ),
+  },
+];
+
 
   const measurementsContent = (
     <>
@@ -869,9 +907,12 @@ const handleCSVUpload = ({ file }) => {
         columns={measurementsColumns}
         dataSource={measurements}
         rowKey="id"
-        pagination={{ pageSize: 50 }}
-        scroll={{ y: 400 }}
-        size="middle"
+        pagination={{
+          pageSize: 1000, // large number to show many rows per page (adjust as needed)
+          showSizeChanger: false,
+        }}
+        scroll={{ y: 550 }} // fixed height for vertical scrollbar inside table
+        size="small" // smaller row height to fit more rows
       />
 
       <Modal
@@ -889,7 +930,7 @@ const handleCSVUpload = ({ file }) => {
           </Form.Item>
           <Form.Item
             label="Measurement Name"
-            name="measurementNameIdMeasurementName"
+            name="measurementNameId"
             rules={[{ required: true, message: 'Please select measurement name!' }]}
           >
             <Select placeholder="Select measurement name" showSearch optionFilterProp="children" filterOption={(input, option) =>
@@ -961,15 +1002,14 @@ const handleCSVUpload = ({ file }) => {
                   <Form.Item
                     label="Boolean Value"
                     name="valueBool"
-                    valuePropName="checked"
                     rules={[{ required: true, message: 'Please select boolean value!' }]}
                   >
                     <Radio.Group>
-                      <Radio value={true}>True</Radio>
-                      <Radio value={false}>False</Radio>
+                      <Radio value={1}>True</Radio>
+                      <Radio value={0}>False</Radio>
                     </Radio.Group>
                   </Form.Item>
-                );
+                );  
               }
               return null;
             }}
