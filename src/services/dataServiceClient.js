@@ -88,11 +88,6 @@ export async function createMeasurement(datasetId, measurement) {
   return response.data;
 }
 
-export async function updateMeasurement(datasetId, id, measurement) {
-  const response = await dataServiceClient.put(`/datasets/${datasetId}/measurements/${id}`, measurement);
-  return response.data;
-}
-
 export async function deleteMeasurement(datasetId, id) {
   await dataServiceClient.delete(`/datasets/${datasetId}/measurements/${id}`);
 }
