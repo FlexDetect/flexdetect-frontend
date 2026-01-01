@@ -1,5 +1,6 @@
 import axios from 'axios';
 import { getToken } from './auth';
+import { data } from 'react-router-dom';
 
 const DATA_SERVICE_URL = 'http://localhost:8081/api';
 
@@ -77,6 +78,7 @@ export async function deleteDataset(facilityId, id) {
   await dataServiceClient.delete(`/facilities/${facilityId}/datasets/${id}`);
 }
 
+
 // Measurements endpoints (dataset scoped)
 export async function fetchMeasurements(datasetId) {
   const response = await dataServiceClient.get(`/datasets/${datasetId}/measurements`);
@@ -90,6 +92,15 @@ export async function createMeasurement(datasetId, measurement) {
 
 export async function deleteMeasurement(datasetId, id) {
   await dataServiceClient.delete(`/datasets/${datasetId}/measurements/${id}`);
+}
+
+export async function bulkInsertMeasurements(datasetId, measurementsBulkRequest) {
+  const response = await dataServiceClient.post(`/datasets/${datasetId}/measurements/bulk`, measurementsBulkRequest);
+  return response.data;
+}
+
+export async function bulkDeleteMeasurements(datasetId) {
+  await dataServiceClient.delete(`/datasets/${datasetId}/measurements`);
 }
 
 export default dataServiceClient;

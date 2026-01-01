@@ -22,6 +22,9 @@ import {
 import {
   createMeasurement,
   deleteMeasurement,
+  bulkInsertMeasurements,
+  deleteAllMeasurementsForDataset,
+  bulkDeleteMeasurements,
 } from '../services/dataServiceClient';
 import dayjs from 'dayjs';
 
@@ -38,6 +41,7 @@ const Measurements = ({ measurements, measurementNames, selectedDatasetId, onRef
   const [editingMeasurement, setEditingMeasurement] = useState(null);
   const [measurementForm] = Form.useForm();
   const [csvUploading, setCsvUploading] = useState(false);
+  const [deletingAll, setDeletingAll] = useState(false);
 
   const measurementNameMap = useMemo(() => {
     const map = {};
@@ -47,6 +51,7 @@ const Measurements = ({ measurements, measurementNames, selectedDatasetId, onRef
     return map;
   }, [measurementNames]);
 
+  // Save single measurement unchanged (for manual add)
   const saveMeasurement = async (formValues) => {
     if (!selectedDatasetId) {
       message.error('No dataset selected');
@@ -115,6 +120,27 @@ const Measurements = ({ measurements, measurementNames, selectedDatasetId, onRef
     setMeasurementModalVisible(true);
   };
 
+  // NEW: Bulk Delete Handler
+  const handleDeleteAll = async () => {
+    if (!selectedDatasetId) {
+      message.error('No dataset selected');
+      return;
+    }
+
+    try {
+      setDeletingAll(true);
+      await bulkDeleteMeasurements(selectedDatasetId);
+      message.success('All measurements deleted for dataset');
+      onRefreshMeasurements();
+    } catch (err) {
+      console.error(err);
+      message.error('Failed to delete all measurements');
+    } finally {
+      setDeletingAll(false);
+    }
+  };
+
+  // UPDATED: CSV Upload uses bulk API now
   const handleCSVUpload = ({ file }) => {
     if (!file || !selectedDatasetId) return;
 
@@ -145,6 +171,7 @@ const Measurements = ({ measurements, measurementNames, selectedDatasetId, onRef
           return;
         }
 
+        // Map CSV columns to measurement names
         const columnMap = {};
         headers.forEach((h, idx) => {
           if (idx === timestampIdx) return;
@@ -157,16 +184,7 @@ const Measurements = ({ measurements, measurementNames, selectedDatasetId, onRef
           return;
         }
 
-        const BATCH_SIZE = 500;
-        let batch = [];
-        let created = 0;
-
-        const flushBatch = async () => {
-          if (batch.length === 0) return;
-          await Promise.all(batch);
-          created += batch.length;
-          batch = [];
-        };
+        const rows = [];
 
         for (let i = 1; i < lines.length; i++) {
           const values = lines[i].split(',').map(v => v.trim());
@@ -182,7 +200,7 @@ const Measurements = ({ measurements, measurementNames, selectedDatasetId, onRef
             const raw = values[idx];
             if (raw === '' || raw == null) continue;
 
-            const payload = {
+            const row = {
               measurementNameId: mn.id,
               timestamp,
               valueInt: null,
@@ -192,27 +210,28 @@ const Measurements = ({ measurements, measurementNames, selectedDatasetId, onRef
 
             if (mn.dataType === 'FLOAT') {
               const v = Number(raw);
-              if (!Number.isNaN(v)) payload.valueFloat = v;
+              if (!Number.isNaN(v)) row.valueFloat = v;
             } else if (mn.dataType === 'INT') {
               const v = Number(raw);
-              if (!Number.isNaN(v)) payload.valueInt = v;
+              if (!Number.isNaN(v)) row.valueInt = v;
             } else if (mn.dataType === 'BOOL') {
-              if (raw === '1' || raw.toLowerCase() === 'true') payload.valueBool = 1;
-              else if (raw === '0' || raw.toLowerCase() === 'false') payload.valueBool = 0;
+              if (raw === '1' || raw.toLowerCase() === 'true') row.valueBool = 1;
+              else if (raw === '0' || raw.toLowerCase() === 'false') row.valueBool = 0;
               else continue;
             }
 
-            batch.push(createMeasurement(selectedDatasetId, payload));
-
-            if (batch.length >= BATCH_SIZE) {
-              await flushBatch();
-            }
+            rows.push(row);
           }
         }
 
-        await flushBatch();
+        if (rows.length === 0) {
+          message.error('No valid measurement rows to upload');
+          return;
+        }
 
-        message.success(`Uploaded ${created} measurements`);
+        await bulkInsertMeasurements(selectedDatasetId, { rows });
+
+        message.success(`Uploaded ${rows.length} measurements`);
         onRefreshMeasurements();
 
       } catch (err) {
@@ -264,16 +283,14 @@ const Measurements = ({ measurements, measurementNames, selectedDatasetId, onRef
       fixed: 'right',
       width: 120,
       render: (_, record) => (
-        <>
-          <Button
-            type="default"
-            icon={<DeleteOutlined />}
-            size="small"
-            danger={false}
-            style={{ color: '#ff4d4f', borderColor: '#ff4d4f' }}
-            onClick={() => removeMeasurement(record.id)}
-          />
-        </>
+        <Button
+          type="default"
+          icon={<DeleteOutlined />}
+          size="small"
+          danger={false}
+          style={{ color: '#ff4d4f', borderColor: '#ff4d4f' }}
+          onClick={() => removeMeasurement(record.id)}
+        />
       ),
     },
   ];
@@ -292,7 +309,8 @@ const Measurements = ({ measurements, measurementNames, selectedDatasetId, onRef
             Add Measurement
           </Button>
         </Col>
-        <Col>
+
+        <Col style={{ display: 'flex', gap: 8 }}>
           <Upload
             accept=".csv,text/csv"
             beforeUpload={(file) => {
@@ -301,12 +319,22 @@ const Measurements = ({ measurements, measurementNames, selectedDatasetId, onRef
               return false;
             }}
             showUploadList={false}
-            disabled={!selectedDatasetId}
+            disabled={!selectedDatasetId || csvUploading}
           >
             <Button icon={<UploadOutlined />} loading={csvUploading} style={BUTTON_STYLE}>
               Upload CSV
             </Button>
           </Upload>
+
+          <Button
+            type="default"
+            danger
+            loading={deletingAll}
+            disabled={!selectedDatasetId || deletingAll}
+            onClick={handleDeleteAll}
+          >
+            Delete All
+          </Button>
         </Col>
       </Row>
 
