@@ -1,6 +1,5 @@
 import axios from 'axios';
 import { getToken } from './auth';
-import { data } from 'react-router-dom';
 
 const DATA_SERVICE_URL = 'http://localhost:8081/api';
 
@@ -102,5 +101,6 @@ export async function bulkInsertMeasurements(datasetId, measurementsBulkRequest)
 export async function bulkDeleteMeasurements(datasetId) {
   await dataServiceClient.delete(`/datasets/${datasetId}/measurements`);
 }
+
 
 export default dataServiceClient;

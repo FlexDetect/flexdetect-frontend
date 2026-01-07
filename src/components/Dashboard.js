@@ -20,6 +20,8 @@ import Facilities from './Facilities';
 import CustomFields from './CustomFields';
 import Datasets from './Datasets';
 import Measurements from './Measurements';
+import MLDetection from './MLDetection';
+
 
 const { Header, Sider, Content } = Layout;
 const { Title } = Typography;
@@ -149,6 +151,9 @@ const Dashboard = () => {
         onRefreshMeasurements={() => loadMeasurements(selectedDatasetId)}
       />
     ),
+    ml: (
+    <MLDetection selectedDatasetId={selectedDatasetId} measurements={measurements} />
+),
   };
 
   // --- Main Layout ---
@@ -165,37 +170,61 @@ const Dashboard = () => {
           width={220}
           style={{ backgroundColor: '#001529' }}
         >
-          <Menu
-            theme="dark"
-            mode="inline"
-            selectedKeys={[selectedKey]}
-            onClick={(e) => setSelectedKey(e.key)}
-            style={{ height: '100%', borderRight: 0 }}
+      <Menu
+        theme="dark"
+        mode="inline"
+        selectedKeys={[selectedKey]}
+        onClick={(e) => setSelectedKey(e.key)}
+        style={{ height: '100%', borderRight: 0 }}
+      >
+        <Menu.SubMenu
+          key="data"
+          icon={<DatabaseOutlined />}
+          title="Data Service"
+        >
+          <Menu.Item key="facilities" icon={<HomeOutlined />}>
+            Facilities
+          </Menu.Item>
+
+          <Menu.Item key="measurementNames" icon={<ProfileOutlined />}>
+            Custom Fields
+          </Menu.Item>
+
+          <Menu.Item
+            key="datasets"
+            icon={<DatabaseOutlined />}
+            disabled={!selectedFacilityId}
           >
-            <Menu.Item key="facilities" icon={<HomeOutlined />}>
-              Facilities
-            </Menu.Item>
-            <Menu.Item key="measurementNames" icon={<ProfileOutlined />}>
-              Custom Fields
-            </Menu.Item>
-            <Menu.Item
-              key="datasets"
-              icon={<DatabaseOutlined />}
-              disabled={!selectedFacilityId}
-            >
-              Datasets
-            </Menu.Item>
-            <Menu.Item
-              key="measurements"
-              icon={<BarChartOutlined />}
-              disabled={!selectedDatasetId}
-            >
-              Measurements
-            </Menu.Item>
-            <Menu.Item key="settings" icon={<SettingOutlined />} disabled>
-              Settings
-            </Menu.Item>
-          </Menu>
+            Datasets
+          </Menu.Item>
+
+          <Menu.Item
+            key="measurements"
+            icon={<BarChartOutlined />}
+            disabled={!selectedDatasetId}
+          >
+            Measurements
+          </Menu.Item>
+        </Menu.SubMenu>
+
+        <Menu.SubMenu
+          key="analytics"
+          icon={<BarChartOutlined />}
+          title="Analytics"
+        >
+          <Menu.Item
+            key="ml"
+            icon={<SettingOutlined />}
+            disabled={!selectedDatasetId}
+          >
+            ML Detection
+          </Menu.Item>
+
+          <Menu.Item key="visualization" disabled>
+            Visualization
+          </Menu.Item>
+        </Menu.SubMenu>
+      </Menu>
         </Sider>
         <Layout style={{ padding: '24px', backgroundColor: '#e6f7ff' }}>
           <Content
@@ -213,7 +242,9 @@ const Dashboard = () => {
                 ? 'Your Facilities'
                 : selectedKey === 'measurementNames'
                 ? 'Custom Measurement Fields'
-                : selectedKey.charAt(0).toUpperCase() + selectedKey.slice(1)}
+                : selectedKey.charAt(0).toUpperCase() + selectedKey.slice(1)
+                ? 'ML Detection'
+                : selectedKey === 'ml'}
             </Title>
             {contentMap[selectedKey]}
           </Content>
