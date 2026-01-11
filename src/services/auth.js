@@ -1,6 +1,6 @@
 import axios from 'axios';
 import { jwtDecode } from 'jwt-decode';
-const API_URL_USER_SERVICE = 'http://localhost:8080/api';
+const API_URL_USER_SERVICE = 'https://flexdetect-user.mangocoast-2c73addc.italynorth.azurecontainerapps.io/api';
 
 // TODO: Premakni JWT izven localStorage za boljšo varnost
 export async function login(email, password) {

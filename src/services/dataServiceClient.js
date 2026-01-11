@@ -1,7 +1,7 @@
 import axios from 'axios';
 import { getToken } from './auth';
 
-const DATA_SERVICE_URL = 'http://localhost:8081/api';
+const DATA_SERVICE_URL = 'https://flexdetect-data.mangocoast-2c73addc.italynorth.azurecontainerapps.io/api';
 
 const dataServiceClient = axios.create({
   baseURL: DATA_SERVICE_URL,

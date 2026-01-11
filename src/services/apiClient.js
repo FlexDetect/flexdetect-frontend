@@ -1,7 +1,7 @@
 import axios from 'axios';
 import { getToken } from './auth'; // getter za token v auth.js
 
-const API_URL = 'http://localhost:8080/api';
+const API_URL = 'https://flexdetect-user.mangocoast-2c73addc.italynorth.azurecontainerapps.io/api';
 
 const apiClient = axios.create({
   baseURL: API_URL,

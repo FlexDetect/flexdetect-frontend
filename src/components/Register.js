@@ -7,7 +7,7 @@ import Navbar from './Navbar';
 const { Title, Text } = Typography;
 const { Content } = Layout;
 
-const API_URL = 'http://localhost:8080/api/users';
+const API_URL = 'https://flexdetect-user.mangocoast-2c73addc.italynorth.azurecontainerapps.io/api/users';
 
 const Register = () => {
   const navigate = useNavigate();

@@ -220,9 +220,6 @@ const Dashboard = () => {
             ML Detection
           </Menu.Item>
 
-          <Menu.Item key="visualization" disabled>
-            Visualization
-          </Menu.Item>
         </Menu.SubMenu>
       </Menu>
         </Sider>

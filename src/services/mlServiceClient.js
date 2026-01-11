@@ -2,7 +2,7 @@ import axios from 'axios';
 import { getToken } from './auth';
 
 const ML_SERVICE_URL =
-  'https://flexdetect-ml.kindsky-e3be2a2e.italynorth.azurecontainerapps.io';
+  'https://flexdetect-ml.mangocoast-2c73addc.italynorth.azurecontainerapps.io';
 
 const mlServiceClient = axios.create({
   baseURL: ML_SERVICE_URL,
