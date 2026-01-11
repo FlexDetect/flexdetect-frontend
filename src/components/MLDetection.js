@@ -71,11 +71,10 @@ const numericSignals = useMemo(
     try {
       const res = await runMLDetection({
         datasetId: selectedDatasetId,
-        roles: {
-          power: powerMeasurementId,
-          features: featureMeasurementIds
-        }
+        powerMeasurementId,
+        featureMeasurementIds,
       });
+
 
       setResult(res);
       message.success('Detection completed');
