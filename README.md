@@ -35,15 +35,14 @@ Spletni uporabniški vmesnik FlexDetect omogoča interaktivno upravljanje sistem
 
 ## Glavne funkcionalnosti
 - Prijava/odjava uporabnikov z varnostnimi mehanizmi
-- Vizualizacija časovnih vrst z interaktivnimi grafikoni (D3.js)
 - Nastavitve uporabniškega računa in prikaza
-- Izvoz podatkov v različnih formatih (CSV, PDF)
+- Izvoz podatkov v različnih formatih (CSV, JSON)
 
 ---
 
 ## Integracija z API-ji
 - Komunikacija preko REST protokola z mikrostoritvami backend-a
-- Avtomatsko obnavljanje JWT tokenov
+- Avtomatsko preverjanje JWT tokenov
 ---
 
 **Avtor:** Aljaž Brodar  
